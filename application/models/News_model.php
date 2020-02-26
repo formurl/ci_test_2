@@ -50,11 +50,16 @@ class News_model extends MY_Model
     }
 
     /**
+     * @param bool $length
      * @return string
      */
-    public function get_short_description()
+    public function get_short_description($length = false)
     {
-        return $this->short_description;
+        if (!$length || mb_strlen($this->short_description) <= $length) {
+            return $this->short_description;
+        }
+
+        return mb_substr($this->short_description, 0, $length - 3) . '...';
     }
 
     /**
@@ -127,11 +132,12 @@ class News_model extends MY_Model
     }
 
     /**
+     * @param bool $toTimestamp
      * @return int
      */
-    public function get_time_updated()
+    public function get_time_updated($toTimestamp = true)
     {
-        return strtotime($this->time_updated);
+        return $toTimestamp ? strtotime($this->time_updated) : $this->time_updated;
     }
 
     /**
@@ -148,6 +154,10 @@ class News_model extends MY_Model
      */
     public function get_likes()
     {
+        if (is_null($this->likes)) {
+            $this->likes = News_like_model::get_all(["news_id = {$this->id}"]);
+        }
+
         return $this->likes;
     }
 
@@ -156,6 +166,10 @@ class News_model extends MY_Model
      */
     public function get_comments()
     {
+        if (is_null($this->comments)) {
+            $this->comments = Comment_model::get_all(["news_id = {$this->id}"]);
+        }
+
         return $this->comments;
     }
 
@@ -171,10 +185,7 @@ class News_model extends MY_Model
 
         $_data = $CI->s->from(self::NEWS_TABLE)->many();
 
-        $news_list = [];
-        foreach ($_data as $_item) {
-            $news_list[] = (new self())->load_data($_item);
-        }
+        $news_list = self::convert_rows_to_models($_data);
 
         if ($preparation === FALSE) {
             return $news_list;
@@ -205,9 +216,9 @@ class News_model extends MY_Model
             $_info = new stdClass();
             $_info->id = (int)$item->get_id();
             $_info->header = $item->get_header();
-            $_info->description = $item->get_short_description();
+            $_info->description = $item->get_short_description(300);
             $_info->img = $item->get_image();
-            $_info->time = $item->get_time_updated();
+            $_info->time = $item->get_time_updated(false);
             $res[] = $_info;
         }
         return $res;
@@ -223,6 +234,105 @@ class News_model extends MY_Model
         }
 	    return new self($CI->s->insert_id);
     }
-    
 
+    public static function get_last($preparation = false, $limit = 3)
+    {
+        $ci =& get_instance();
+
+        $rows = $ci->s
+            ->from(self::NEWS_TABLE)
+            ->sortDesc('time_created')
+            ->limit($limit)
+            ->many();
+
+        $models = self::convert_rows_to_models($rows);
+
+        return $preparation === false ? $models : self::preparation($models, $preparation);
+    }
+
+    public static function news_exists($id)
+    {
+        $ci =& get_instance();
+
+        return !!$ci->s
+            ->from(self::NEWS_TABLE)
+            ->where("id = $id")
+            ->count();
+    }
+
+    public static function get_one($id)
+    {
+        $ci =& get_instance();
+
+        $row = $ci->s
+            ->from(self::NEWS_TABLE)
+            ->where("id = $id")
+            ->one();
+
+        return (new self())->load_data($row);
+    }
+
+    public function get_info()
+    {
+        $info = [
+            'id' => $this->id,
+            'title' => $this->header,
+            'image' => $this->img,
+            'content' => $this->text,
+            'created_at' => date('d.m.Y H:i:s', strtotime($this->time_created)),
+            'likesCount' => count($this->get_likes()),
+            'commentsCount' => count($this->get_comments()),
+            'comments' => [],
+        ];
+
+        foreach ($this->comments as $comment) {
+            $info['comments'][] = $comment->get_info();
+        }
+
+        return $info;
+    }
+
+    public static function get_popular($limit = 3)
+    {
+        $ci =& get_instance();
+
+        $rows = $ci->s
+            ->from(self::NEWS_TABLE)
+            ->leftJoin(News_like_model::NEWS_LIKE_TABLE, ['news_like.news_id' => 'news.id'])
+            ->groupBy('news.id')
+            ->sortDesc('likes_count')
+            ->limit($limit)
+            ->select([
+                'news.id',
+                'news.header',
+                'news.short_description',
+                'news.text',
+                'news.img',
+                'news.tags',
+                'news.time_created',
+                'news.time_updated',
+                'COUNT(news_like.id) AS likes_count',
+            ])->many();
+
+        $models = self::convert_rows_to_models($rows);
+
+        $popular = [];
+
+        foreach ($models as $model) {
+            $popular[] = $model->get_info();
+        }
+
+        return $popular;
+    }
+
+    protected static function convert_rows_to_models($rows)
+    {
+        $models = [];
+
+        foreach ($rows as $row) {
+            $models[] = (new self())->load_data($row);
+        }
+
+        return $models;
+    }
 }

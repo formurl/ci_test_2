@@ -104,7 +104,7 @@ switch (ENVIRONMENT)
  * Include the path if the folder is not in the same directory
  * as this file.
  */
-$system_path = ENVIRONMENT === 'docker' ? '/project/system' : '/var/www/test_task/system';
+$system_path = ENVIRONMENT === 'docker' ? '/project/system' : '/home/arthur/Desktop/test/ci_test_2/system';
 
 /*
  *---------------------------------------------------------------
@@ -119,7 +119,7 @@ $system_path = ENVIRONMENT === 'docker' ? '/project/system' : '/var/www/test_tas
  *
  * NO TRAILING SLASH!
  */
-$application_folder = ENVIRONMENT === 'docker' ? '/project/application/' : '/var/www/test_task/application';
+$application_folder = ENVIRONMENT === 'docker' ? '/project/application/' : '/home/arthur/Desktop/test/ci_test_2/application';
 
 /*
  *---------------------------------------------------------------
